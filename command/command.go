@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"sort"
@@ -12,7 +13,7 @@ type ICommand interface {
 	New() ICommand
 
 	ParseFlags(args []string)
-	Execute(args []string) bool
+	Execute(args []string) error
 
 	PrintUsage()
 	GetDescription() string
@@ -33,15 +34,11 @@ type command struct {
 	flags map[string]*commandFlag
 }
 
-func (cmd command) ParseFlags(args []string) {
-	cmd.parseFlags(cmd.name, args, cmd.flags)
-}
-
-func (c command) parseFlags(setName string, args []string, flags map[string]*commandFlag) {
-	fs := flag.NewFlagSet(setName, flag.ExitOnError)
+func (this command) ParseFlags(args []string) {
+	fs := flag.NewFlagSet(this.name, flag.ExitOnError)
 	fs.Usage = func() {
-		c.printError("Invalid flag given, the following flags are allowed:")
-		c.printUsage("", flags)
+		this.printError(errors.New("Invalid flag given, the following flags are allowed:"))
+		this.PrintUsage()
 	}
 
 	// TODO There must be a better way to do this...
@@ -49,7 +46,7 @@ func (c command) parseFlags(setName string, args []string, flags map[string]*com
 	ints := map[string]*int{}
 	strings := map[string]*string{}
 
-	for key, element := range flags {
+	for key, element := range this.flags {
 		switch element.Datatype {
 		case "bool":
 			if defaultValue, ok := element.Value.(bool); ok {
@@ -89,40 +86,36 @@ func (c command) parseFlags(setName string, args []string, flags map[string]*com
 	fs.Parse(args)
 
 	for key, element := range bools {
-		flags[key].Value = *element
+		this.flags[key].Value = *element
 	}
 
 	for key, element := range ints {
-		flags[key].Value = *element
+		this.flags[key].Value = *element
 	}
 
 	for key, element := range strings {
-		flags[key].Value = *element
+		this.flags[key].Value = *element
 	}
 }
 
-func (cmd command) PrintUsage() {
-	cmd.printUsage(cmd.GetDescription(), cmd.flags)
-}
-
-func (cmd command) printUsage(desc string, flags map[string]*commandFlag) {
-	fmt.Println(desc)
+func (this command) PrintUsage() {
+	fmt.Println(this.description)
 	fmt.Println("\nAllowed flags:")
 
 	// The order is different from time to time when printing, sort it first
 	keys := make([]string, 0)
-	for k, _ := range flags {
+	for k, _ := range this.flags {
 		keys = append(keys, k)
 	}
 
 	sort.Strings(keys)
 	for _, k := range keys {
 		fmt.Printf("    -%s|--%s <%s> (default: %s) %s\n",
-			flags[k].Shortname,
-			flags[k].Name,
-			flags[k].Datatype,
-			fmt.Sprint(flags[k].Value),
-			flags[k].Description,
+			this.flags[k].Shortname,
+			this.flags[k].Name,
+			this.flags[k].Datatype,
+			fmt.Sprint(this.flags[k].Value),
+			this.flags[k].Description,
 		)
 	}
 }
@@ -131,6 +124,6 @@ func (cmd command) GetDescription() string {
 	return cmd.description
 }
 
-func (cmd command) printError(err string) {
-	fmt.Println(ansi.Color(err, "red"))
+func (cmd command) printError(err error) {
+	fmt.Println(ansi.Color(err.Error(), "red"))
 }

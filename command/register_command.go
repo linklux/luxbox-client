@@ -23,16 +23,17 @@ func (cmd RegisterCommand) New() ICommand {
 	}
 }
 
-func (cmd RegisterCommand) Execute(args []string) bool {
-	request := component.Request{Action: "register", Meta: map[string]string{}}
+func (cmd RegisterCommand) Execute(args []string) error {
+	request := component.Request{Action: "register", Meta: map[string]interface{}{}}
 
-	response, err := cmd.Send(request)
+	cmd.Connect()
+
+	response, err := cmd.SendAndDisconnect(request)
 	if err != nil {
-		cmd.printError(err.Error())
-		return false
+		return err
 	}
 
 	fmt.Printf("%s", response.Data)
 
-	return true
+	return nil
 }

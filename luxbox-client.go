@@ -47,12 +47,15 @@ func main() {
 		return
 	}
 
+	// Instantiate the command handler
+	handler := commands[command].New()
+
 	commandArgs := []string{}
 	if len(args) > 1 {
 		commandArgs = args[1:]
 
 		if commandArgs[0] == "-h" || commandArgs[0] == "--help" {
-			commands[command].PrintUsage()
+			handler.PrintUsage()
 			return
 		}
 	}
