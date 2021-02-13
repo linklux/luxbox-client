@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/linklux/luxbox-client/data"
 )
 
 type Request struct {
@@ -17,8 +19,8 @@ type Request struct {
 }
 
 type Response struct {
-	Code int         `json:"code"`
-	Data interface{} `json:"data"`
+	Code int                    `json:"code"`
+	Data map[string]interface{} `json:"data"`
 }
 
 type ServerConnector struct {
@@ -26,9 +28,9 @@ type ServerConnector struct {
 	initialized bool
 }
 
-// TODO Fetch server information from config
 func (this *ServerConnector) Connect() error {
-	conn, err := net.Dial("tcp", "localhost:8068")
+	conf := data.GetConfig()
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", conf.Server.Host, conf.Server.Port))
 	if err != nil {
 		return err
 	}
@@ -69,8 +71,6 @@ func (this *ServerConnector) GetResponse() (Response, error) {
 	res, _ := bufio.NewReader(this.conn).ReadString('\n')
 	res = strings.TrimSpace(res)
 
-	fmt.Printf("got response: %s\n", res)
-
 	response := Response{}
 	if err := json.Unmarshal([]byte(res), &response); err != nil {
 		return Response{}, err
@@ -106,8 +106,6 @@ func (this *ServerConnector) SendAndDisconnect(request Request) (Response, error
 func (this *ServerConnector) WaitForMessage(msg string) error {
 	res, _ := bufio.NewReader(this.conn).ReadString('\n')
 	res = strings.TrimSpace(res)
-
-	fmt.Printf("got message: %s\n", res)
 
 	if res != msg {
 		return errors.New(fmt.Sprintf("unexpected message received from server, expected '%s', got '%s'\n", msg, res))

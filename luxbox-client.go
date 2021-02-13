@@ -8,6 +8,9 @@ import (
 	"github.com/mgutz/ansi"
 )
 
+const BASE_DIR = ".luxbox"
+const CONFIG_FILE = "luxbox.yaml"
+
 var commands = map[string]interface{ command.ICommand }{
 	"register": command.RegisterCommand{},
 }
@@ -65,9 +68,12 @@ func main() {
 		commandFlags = args[2:]
 	}
 
-	// TODO Allow multiple arguments per command where desired.
 	// Try to parse command flags for the given command. Will terminate program
 	// execution and print usage for the given command when an error occures.
-	commands[command].ParseFlags(commandFlags)
-	commands[command].Execute(commandArgs)
+	handler.ParseFlags(commandFlags)
+
+	err := handler.Execute(commandArgs)
+	if err != nil {
+		fmt.Println(ansi.Color(err.Error(), "red"))
+	}
 }
