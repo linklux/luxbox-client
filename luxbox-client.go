@@ -13,6 +13,7 @@ const CONFIG_FILE = "luxbox.yaml"
 
 var commands = map[string]interface{ command.ICommand }{
 	"register": command.RegisterCommand{},
+	"upload":   command.UploadCommand{},
 }
 
 func printError(err string) {

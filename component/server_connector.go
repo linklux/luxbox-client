@@ -25,17 +25,23 @@ type Response struct {
 
 type ServerConnector struct {
 	conn        net.Conn
-	initialized bool
+	conf        data.Config
+	connected   bool
+	authEnabled bool
 }
 
 func (this *ServerConnector) Connect() error {
-	conf := data.GetConfig()
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", conf.Server.Host, conf.Server.Port))
-	if err != nil {
-		return err
+	if this.connected {
+		return nil
 	}
 
-	this.initialized = true
+	this.conf = data.GetConfig()
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", this.conf.Server.Host, this.conf.Server.Port))
+	if err != nil {
+		return errors.New("could not connect to server: " + err.Error())
+	}
+
+	this.connected = true
 	this.conn = conn
 
 	return nil
@@ -43,19 +49,33 @@ func (this *ServerConnector) Connect() error {
 
 func (this *ServerConnector) Disconnect() {
 	// Only close connection when the connector was initialized successfully
-	if this.initialized {
+	if this.connected {
 		this.conn.Close()
 	}
 }
 
+func (this *ServerConnector) GetConnection() net.Conn {
+	return this.conn
+}
+
+/**
+ * Control whether or not the user authentication meta data is included in the
+ * requests sent to the server with SendRequest(). When enabled, the required
+ * meta data is automatically retrieved from the configuration.
+ */
+func (this *ServerConnector) UserAuthEnabled(enabled bool) {
+	this.authEnabled = enabled
+}
+
 func (this *ServerConnector) SendRequest(request Request) error {
-	if !this.initialized {
-		return errors.New("cannot send request, connector must be initialized before use")
+	if !this.connected {
+		return errors.New("cannot send request, not connected to server")
 	}
 
-	// Hash the token if it is included in the request
-	if _, ok := request.Meta["token"]; ok {
-		request.Meta["token"] = stringHashB64(request.Meta["token"].(string))
+	// Include the authentication meta in the request when enabled
+	if this.authEnabled {
+		request.Meta["user"] = this.conf.User.User
+		request.Meta["token"] = stringHashB64(this.conf.User.Token)
 	}
 
 	payload, err := json.Marshal(request)
@@ -68,6 +88,10 @@ func (this *ServerConnector) SendRequest(request Request) error {
 }
 
 func (this *ServerConnector) GetResponse() (Response, error) {
+	if !this.connected {
+		return Response{}, errors.New("cannot fetch response, not connected to server")
+	}
+
 	res, _ := bufio.NewReader(this.conn).ReadString('\n')
 	res = strings.TrimSpace(res)
 
