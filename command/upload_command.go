@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/linklux/luxbox-client/component"
+
+	"github.com/cheggaaa/pb/v3"
 )
 
 const CHUNK_SIZE = 1024
@@ -36,8 +38,6 @@ func (cmd UploadCommand) New() ICommand {
 }
 
 func (cmd UploadCommand) Execute(args []string) error {
-	fmt.Printf("%v\n", cmd.flags)
-
 	if len(args) < 1 {
 		return errors.New("missing name or path to the local resource")
 	}
@@ -90,26 +90,33 @@ func (cmd UploadCommand) Execute(args []string) error {
 	}
 
 	// Server is ready, start streaming data
-	putFile(file, cmd.GetConnection(), fi.Size())
+	putFile(file, cmd.GetConnection(), fi.Size(), resourceName)
 
 	response, err := cmd.GetResponse()
 	if err != nil {
 		return err
+	} else if response.Code != 3 {
+		return errors.New(fmt.Sprintf("unexpected response code %d, response %v", response.Code, response.Data))
 	}
-
-	fmt.Printf("%s\n", response.Data["message"])
 
 	return nil
 }
 
-func putFile(file *os.File, conn net.Conn, size int64) error {
+func putFile(file *os.File, conn net.Conn, size int64, name string) error {
 	r := bufio.NewReader(file)
 	read, written, chunks := int64(0), int64(0), int(0)
 
 	buf := make([]byte, 0, 1024)
 
+	// progress bar
+	template := `{{string . "filename"}}  {{speed . "%8s/s" "       -/s"}}  {{counters . "%8s / %8s" "%s/-       "}} {{etime . "%4s"}} {{bar . "[" "#" "#" " " "]"}} {{percent . "%6.02f%%" "?"}}`
+	bar := pb.ProgressBarTemplate(template).Start64(size)
+	barReader := bar.NewProxyReader(r)
+
+	bar.Set("filename", fmt.Sprintf("%-30s", name))
+
 	for read < size {
-		n, err := r.Read(buf[:cap(buf)])
+		n, err := barReader.Read(buf[:cap(buf)])
 		if n < 1 {
 			continue
 		}
@@ -139,6 +146,8 @@ func putFile(file *os.File, conn net.Conn, size int64) error {
 		// related to networking is instant.
 		time.Sleep(500000)
 	}
+
+	bar.Finish()
 
 	if read != written {
 		return errors.New(fmt.Sprintf("byte count read from file (%d) does not match bytes written to server (%d)", read, written))
